@@ -29,11 +29,13 @@ Adafruit_MMA8451 mma = Adafruit_MMA8451();
 
 Timer t;
 
+bool quiet = false; //if quiet is false, debug information will be sent to Serial output
+
 //define possible servo speeds using enum:
 enum servoSpeed {
-  maxBR = 0, //max forward/right
+  maxBR = 0, //max backward/right
   servoStop = 93,
-  maxFL = 180 //max backward/left
+  maxFL = 180 //max forward/left
 };
 
 //set up initial accel recording (for calibration)
@@ -89,10 +91,10 @@ int twitchCount = 0;
 int twitchTime;
 
 //Keeping track of tail positions
-int tipLRCPos = 2;
-int midFBCPos = 2;
-int baseLRCPos = 2;
-int tipFBCPos = 2;
+int tipLRCPos = 0;
+int midFBCPos = 0;
+int baseLRCPos = 0;
+int tipFBCPos = 0;
 
 void setup(void) 
 {
@@ -101,14 +103,16 @@ void setup(void)
   servo3.attach(2); //Base LRC
   servo4.attach(3); //Tip FBC
 
+  Serial.begin(9600);
+
   //Calibrate Servo Positions
   center_servos();
 
   //Find accelerometer
   do {
-    Serial.println("Searching for accelerometer...");
+    debug_out("Searching for accelerometer...");
   } while (!mma.begin());
-  Serial.println("MMA8451 found!");
+  debug_out("MMA8451 found!");
   mma.setRange(MMA8451_RANGE_2_G);
 
   //Get accelerometer event
@@ -158,15 +162,19 @@ void loop()
   //State priority: sprinting, walking, leaning, standing
   if (abs(userFlatSpeed) > 2) {
     stateType = sprinting;
+    debug_out("stateType: sprinting");
   }
   else if (abs(userFlatSpeed) > 1) {
     stateType = walking;
+    debug_out("stateType: walking");
   }
   else if ((abs(xAccel) >= 9 && abs(yAccel) <= 1 && zAccel < 0) || (abs(xAccel) <= 1 && abs(yAccel) >= 9 && zAccel < 0)) {
     stateType = leaning;
+    debug_out("stateType: leaning");
   }
   else {
     stateType = standing;
+    debug_out("stateType: standing");
   }
 
   //Determine state direction
@@ -174,17 +182,21 @@ void loop()
   if (abs(userXvel) >= abs(userYvel)) { //sideways movement
     if(userXvel >= 0) {
       stateDir = right;
+      debug_out("stateDir: right");
     }
     else {
       stateDir = left;
+      debug_out("stateDir: left");
     }
   }
   else { //forward/backward movement
     if(userYvel >= 0) {
       stateDir = forward;
+      debug_out("stateDir: forward");
     }
     else {
       stateDir = backward;
+      debug_out("stateDir: backward");
     }
   }
 
@@ -193,13 +205,16 @@ void loop()
   if(abs(userZvel) > 1) { //if user is moving vertically
     if(userZvel >= 0) {
       stateVert = rising;
+      debug_out("stateVert: rising");
     }
     else {
       stateVert = falling;
+      debug_out("stateVert: falling");
     }
   }
   else { //if user is not moving vertically
     stateVert = level;
+    debug_out("stateVert: level");
   }
 
   //Perform operations based on user state.
@@ -354,6 +369,7 @@ void loop()
 
   //Activate twitch
   if (twitchCount >= twitchTime) {
+    debug_out("action: twitching");
     int randy = random(1, 4); //1 is tipLRC twitch left, 2 is tipLRC twitch right, 3 is tipFBC backward, 4 is tipFBC forward.
     int twitchPos = random(400, 600);
     switch (randy) {
@@ -393,6 +409,15 @@ void loop()
 
 //Generic method to move a particular servo for a certain amount of time, at a certain speed, then stop.
 void move_servo(int servoNum, servoSpeed speedSet, int milliseconds) {
+  String debug_info = "";
+  debug_info += "moving servo ";
+  debug_info += servoNum;
+  debug_info += " at ";
+  debug_info += speedSet;
+  debug_info += " for ";
+  debug_info += milliseconds; 
+  debug_info += "ms.";
+  debug_out(debug_info);
   int dir_modifier = 1; //dir_modifier is 1 if moving right, -1 if moving left.
   if (speedSet = maxFL) {
     dir_modifier = -1;
@@ -429,6 +454,13 @@ void move_servo(int servoNum, servoSpeed speedSet, int milliseconds) {
 
 //Generic method to move a particular servo from its current position to a new position.
 void move_servo_to(int servoNum, int targetPos) {
+  String debug_info = "";
+  debug_info += "moving servo ";
+  debug_info += servoNum;
+  debug_info += " to ";
+  debug_info += targetPos;
+  debug_info += ".";
+  debug_out(debug_info);
   int servoPos;
   int posDiff;
   switch (servoNum) {
@@ -486,13 +518,14 @@ void move_servo_to(int servoNum, int targetPos) {
       break;
     default:
       break;
-  }  
+  }
 }
 
 //Calibration method moves servos to their limit, then moves them back to the center.
 //Consider rewriting this to be more dance-like?
 //Alternatively, consider rewriting this to move all servos to limits at the same time.
 void center_servos() {
+  debug_out("calibrating servos...");
   //Center tip LRC
   move_servo(1, maxBR, 1100);
   move_servo(1, maxFL, 600);
@@ -516,5 +549,11 @@ void center_servos() {
   move_servo(4, maxFL, 450);
   tipFBCPos = 0; //tipFBC is centered
   delay(1500);
-
 }
+
+void debug_out(String args) {
+  if(!quiet) {
+    Serial.println(args);
+  }
+}
+
