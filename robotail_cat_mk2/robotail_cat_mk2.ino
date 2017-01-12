@@ -47,10 +47,12 @@ float initZaccel;
 float prevXaccel;
 float prevYaccel;
 float prevZaccel;
+float prevAccel;
+float prevFlatAccel;
 
 //set up user motion tracking
-float userSpeed;
-float userFlatSpeed;
+float userAccel;
+float userFlatAccel;
 float userXvel;
 float userYvel;
 float userZvel;
@@ -123,13 +125,8 @@ void setup(void)
   prevXaccel = event.acceleration.x;
   prevYaccel = event.acceleration.y;
   prevZaccel = event.acceleration.z;
-
-  //Initialize velocity trackers
-  userSpeed = 0;
-  userFlatSpeed = 0;
-  userXvel = 0;
-  userYvel = 0;
-  userZvel = 0;
+  prevAccel = sqrt(pow(prevXaccel, 2) + pow(prevYaccel, 2) + pow(prevZaccel, 2));
+  prevFlatAccel = sqrt(pow(prevXaccel, 2) + pow(prevYaccel, 2));
 
   //Set initial loop time to 0
   loopTime = 0;
@@ -150,21 +147,16 @@ void loop()
   int yAccel = event.acceleration.y;
   int zAccel = event.acceleration.z;
 
-  //Determine user speed (m/s):
-  userXvel += xAccel * loopTime / 1000;
-  userYvel += yAccel * loopTime / 1000;
-  userZvel += zAccel * loopTime / 1000;
-
-  userSpeed = sqrt(pow(userXvel, 2) + pow(userYvel, 2) + pow(userZvel, 2));
-  userFlatSpeed = sqrt(pow(userXvel, 2) + pow(userYvel, 2));
+  userAccel = sqrt(pow(xAccel, 2) + pow(yAccel, 2) + pow(zAccel, 2));
+  userFlatAccel = sqrt(pow(xAccel, 2) + pow(yAccel, 2));
 
   //Determine state type
   //State priority: sprinting, walking, leaning, standing
-  if (abs(userFlatSpeed) > 2) {
+  if (abs(xAccel - prevXaccel) > 2) {
     stateType = sprinting;
     debug_out("stateType: sprinting");
   }
-  else if (abs(userFlatSpeed) > 1) {
+  else if (abs(xAccel - prevXaccel) > 1) {
     stateType = walking;
     debug_out("stateType: walking");
   }
@@ -179,8 +171,8 @@ void loop()
 
   //Determine state direction
   //(assuming standard cartesian coordinate system (forward/backward is +/- Y, right/left is +/- X)
-  if (abs(userXvel) >= abs(userYvel)) { //sideways movement
-    if(userXvel >= 0) {
+  if (abs(yAccel) >= abs(xAccel)) { //sideways movement
+    if(yAccel <= 0) {
       stateDir = right;
       debug_out("stateDir: right");
     }
@@ -190,7 +182,7 @@ void loop()
     }
   }
   else { //forward/backward movement
-    if(userYvel >= 0) {
+    if(xAccel >= 0) {
       stateDir = forward;
       debug_out("stateDir: forward");
     }
@@ -395,9 +387,11 @@ void loop()
   }
 
   //Store values of previous accelerations for future use.
-  prevXaccel = event.acceleration.x;
-  prevYaccel = event.acceleration.y;
-  prevZaccel = event.acceleration.z;
+  prevXaccel = xAccel;
+  prevYaccel = yAccel;
+  prevZaccel = zAccel;
+  prevAccel = userAccel;
+  prevFlatAccel = userFlatAccel;
 
   twitchCount++;
   
